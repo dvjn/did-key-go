@@ -30,7 +30,7 @@
 //		keyHex := "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
 //		keyBytes, _ := hex.DecodeString(keyHex)
 //
-//		didKey, err := didkey.Encode(didkey.KeyTypeEd25519, keyBytes)
+//		didKey, err := didkey.Encode(didkey.Ed25519PublicKey, keyBytes)
 //		if err != nil {
 //			panic(err)
 //		}
@@ -42,28 +42,19 @@
 //		if err != nil {
 //			panic(err)
 //		}
-//		fmt.Printf("Key Type: %s\n", keyType)
+//		fmt.Printf("Key Type: %v\n", keyType)
 //		fmt.Printf("Key Bytes: %x\n", decodedBytes)
-//
-//		// Using the DIDKey struct
-//		dk, err := didkey.FromBytes(didkey.KeyTypeEd25519, keyBytes)
-//		if err != nil {
-//			panic(err)
-//		}
-//
-//		didKeyString, _ := dk.String()
-//		fmt.Println("DID Key from struct:", didKeyString)
 //	}
 //
 // # Supported Key Types
 //
-//   - Ed25519: 32-byte signature keys (multicodec: 0xed)
-//   - X25519: 32-byte key agreement keys (multicodec: 0xec)
-//   - secp256k1: 33-byte compressed public keys (multicodec: 0xe7)
-//   - BLS12-381 G1: 48-byte keys (multicodec: 0xea)
-//   - BLS12-381 G2: 96-byte keys (multicodec: 0xeb)
-//   - P-256: 33-byte compressed public keys (multicodec: 0x1200)
-//   - P-384: 49-byte compressed public keys (multicodec: 0x1201)
+//   - Ed25519: 32-byte signature keys
+//   - X25519: 32-byte key agreement keys
+//   - secp256k1: 33-byte compressed public keys
+//   - BLS12-381 G1: 48-byte keys
+//   - BLS12-381 G2: 96-byte keys
+//   - P-256: 33-byte compressed public keys
+//   - P-384: 49-byte compressed public keys
 //
 // # Security Considerations
 //

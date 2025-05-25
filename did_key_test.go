@@ -14,27 +14,27 @@ var testVectors = map[string]struct {
 	shouldErr bool
 }{
 	"Ed25519-from-spec": {
-		keyType: KeyTypeEd25519,
+		keyType: Ed25519PublicKey,
 		keyHex:  "2e6fcce36701dc791488e0d0b1745cc1e33a4c1c9fcc41c63bd343dbbe0970e6",
 		didKey:  "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
 	},
 	"Ed25519-test-1": {
-		keyType: KeyTypeEd25519,
+		keyType: Ed25519PublicKey,
 		keyHex:  "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
 		didKey:  "did:key:z6MktwupdmLXVVqTzCw4i46r4uGyosGXRnR3XjN4Zq7oMMsw",
 	},
 	"Ed25519-test-2": {
-		keyType: KeyTypeEd25519,
+		keyType: Ed25519PublicKey,
 		keyHex:  "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
 		didKey:  "did:key:z6MkfgKfvJf5pnfqLkJt7K2nhoK9k35dd3V8q7AFhJFm4PCa",
 	},
 	"Secp256k1-test": {
-		keyType: KeyTypeSecp256k1,
+		keyType: Secp256k1PublicKey,
 		keyHex:  "03fdd57adec3d438ea237fe46b33ee1e016eda6b585c3e27ea66686c2ea5358479",
 		didKey:  "did:key:zQ3shwiy5TJU1fJ7XH6eJLRXJYvh6tuU4YKZmfU46JtJtHTAx",
 	},
 	"P-256-test": {
-		keyType: KeyTypeP256,
+		keyType: P256PublicKey,
 		keyHex:  "02d0ef6c6209e4e3d0de5e555b9b3f7e3c5a4c7b1e9e2d8c3f4a5b6c7d8e9f01a0",
 		didKey:  "did:key:zDnaeeVZbSMKojCG3A1k46yRNVhLV7XXxr2mniUF13p3FSyXm",
 	},
@@ -130,46 +130,6 @@ func TestRoundTrip(t *testing.T) {
 	}
 }
 
-func TestDIDKeyStruct(t *testing.T) {
-	keyBytes, _ := hex.DecodeString("2e6fcce36701dc791488e0d0b1745cc1e33a4c1c9fcc41c63bd343dbbe0970e6")
-
-	didKey, err := FromBytes(KeyTypeEd25519, keyBytes)
-	if err != nil {
-		t.Fatalf("FromBytes failed: %v", err)
-	}
-
-	// Test String method
-	didKeyString, err := didKey.String()
-	if err != nil {
-		t.Fatalf("String failed: %v", err)
-	}
-
-	expected := "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK"
-	if didKeyString != expected {
-		t.Errorf("Expected %s, got %s", expected, didKeyString)
-	}
-
-	// Test Bytes method
-	retrievedBytes := didKey.Bytes()
-	if !bytes.Equal(retrievedBytes, keyBytes) {
-		t.Errorf("Bytes mismatch: expected %x, got %x", keyBytes, retrievedBytes)
-	}
-
-	// Test Parse
-	parsedDIDKey, err := Parse(didKeyString)
-	if err != nil {
-		t.Fatalf("Parse failed: %v", err)
-	}
-
-	if parsedDIDKey.Type != KeyTypeEd25519 {
-		t.Errorf("Parsed key type mismatch: expected %s, got %s", KeyTypeEd25519, parsedDIDKey.Type)
-	}
-
-	if !bytes.Equal(parsedDIDKey.Key, keyBytes) {
-		t.Errorf("Parsed key bytes mismatch: expected %x, got %x", keyBytes, parsedDIDKey.Key)
-	}
-}
-
 func TestValidation(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -179,31 +139,31 @@ func TestValidation(t *testing.T) {
 	}{
 		{
 			name:      "Valid Ed25519",
-			keyType:   KeyTypeEd25519,
+			keyType:   Ed25519PublicKey,
 			keyBytes:  make([]byte, 32),
 			shouldErr: false,
 		},
 		{
 			name:      "Invalid Ed25519 size",
-			keyType:   KeyTypeEd25519,
+			keyType:   Ed25519PublicKey,
 			keyBytes:  make([]byte, 31),
 			shouldErr: true,
 		},
 		{
 			name:      "Empty bytes",
-			keyType:   KeyTypeEd25519,
+			keyType:   Ed25519PublicKey,
 			keyBytes:  []byte{},
 			shouldErr: true,
 		},
 		{
 			name:      "Valid Secp256k1",
-			keyType:   KeyTypeSecp256k1,
+			keyType:   Secp256k1PublicKey,
 			keyBytes:  make([]byte, 33),
 			shouldErr: false,
 		},
 		{
 			name:      "Invalid Secp256k1 size",
-			keyType:   KeyTypeSecp256k1,
+			keyType:   Secp256k1PublicKey,
 			keyBytes:  make([]byte, 32),
 			shouldErr: true,
 		},
@@ -251,22 +211,12 @@ func TestIsValidDIDKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			isValid := IsValidDIDKey(tt.didKey)
+			_, _, err := Decode(tt.didKey)
+			isValid := err == nil
 			if isValid != tt.isValid {
 				t.Errorf("Expected %v, got %v", tt.isValid, isValid)
 			}
 		})
-	}
-}
-
-func TestGetKeyType(t *testing.T) {
-	keyType, err := GetKeyType("did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK")
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	if keyType != KeyTypeEd25519 {
-		t.Errorf("Expected %s, got %s", KeyTypeEd25519, keyType)
 	}
 }
 
@@ -284,7 +234,7 @@ func TestErrorHandling(t *testing.T) {
 	}
 
 	// Test empty key bytes
-	_, err = Encode(KeyTypeEd25519, []byte{})
+	_, err = Encode(Ed25519PublicKey, []byte{})
 	if err == nil {
 		t.Errorf("Expected error for empty key bytes")
 	}
@@ -300,7 +250,7 @@ func TestSpecificationExamples(t *testing.T) {
 		t.Fatalf("Failed to decode spec DID: %v", err)
 	}
 
-	if keyType != KeyTypeEd25519 {
+	if keyType != Ed25519PublicKey {
 		t.Errorf("Expected Ed25519, got %s", keyType)
 	}
 

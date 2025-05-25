@@ -1,12 +1,13 @@
 package didkey
 
 import (
-	"fmt"
 	"strings"
+
+	"github.com/multiformats/go-multibase"
+	"github.com/multiformats/go-varint"
 )
 
 const (
-	// DIDKeyPrefix is the standard prefix for DID key identifiers
 	DIDKeyPrefix = "did:key:"
 )
 
@@ -14,133 +15,66 @@ const (
 // Format: did:key:MULTIBASE(base58-btc, MULTICODEC(public-key-type, raw-public-key-bytes))
 func Encode(keyType KeyType, keyBytes []byte) (string, error) {
 	if len(keyBytes) == 0 {
-		return "", NewError("encode", "key bytes cannot be empty")
+		return "", ErrEmptyKeyBytes
 	}
 
-	// Validate key size based on type
 	if err := validateKeySize(keyType, keyBytes); err != nil {
 		return "", err
 	}
 
-	// Encode with multicodec prefix
-	multicodecBytes, err := encodeMulticodecKey(keyType, keyBytes)
+	codecBytes := varint.ToUvarint(uint64(keyType))
+	multicodecBytes := make([]byte, len(codecBytes)+len(keyBytes))
+	copy(multicodecBytes, codecBytes)
+	copy(multicodecBytes[len(codecBytes):], keyBytes)
+
+	multibaseString, err := multibase.Encode(multibase.Base58BTC, multicodecBytes)
 	if err != nil {
-		return "", err
+		return "", ErrMultibaseEncodeFailedWithContext(err)
 	}
 
-	// Encode with multibase
-	multibaseString := encodeMultibase(multicodecBytes)
-
-	// Construct DID key
 	return DIDKeyPrefix + multibaseString, nil
 }
 
 // Decode converts a DID key string back to key type and raw bytes
 func Decode(didKey string) (KeyType, []byte, error) {
-	// Validate DID key prefix
 	if !strings.HasPrefix(didKey, DIDKeyPrefix) {
-		return "", nil, NewError("decode", fmt.Sprintf("invalid DID key prefix, expected '%s'", DIDKeyPrefix))
+		return 0, nil, ErrInvalidDIDKeyPrefixWithContext(DIDKeyPrefix)
 	}
 
-	// Extract multibase part
 	multibaseString := didKey[len(DIDKeyPrefix):]
 	if multibaseString == "" {
-		return "", nil, NewError("decode", "empty multibase string")
+		return 0, nil, ErrEmptyMultibaseString
 	}
 
-	// Decode from multibase
-	multicodecBytes, err := decodeMultibase(multibaseString)
+	encoding, multicodecBytes, err := multibase.Decode(multibaseString)
 	if err != nil {
-		return "", nil, NewError("decode", fmt.Sprintf("failed to decode multibase: %v", err))
+		return 0, nil, ErrMultibaseDecodeFailedWithContext(err)
 	}
 
-	// Decode multicodec and extract key
-	keyType, keyBytes, err := decodeMulticodecKey(multicodecBytes)
+	// DID keys must use base58-btc encoding per specification
+	if encoding != multibase.Base58BTC {
+		return 0, nil, ErrExpectedBase58BTC
+	}
+
+	if len(multicodecBytes) == 0 {
+		return 0, nil, ErrEmptyData
+	}
+
+	value, bytesRead, err := varint.FromUvarint(multicodecBytes)
 	if err != nil {
-		return "", nil, err
+		return 0, nil, ErrInvalidVarintWithContext(err)
 	}
 
-	// Validate key size
+	if bytesRead >= len(multicodecBytes) {
+		return 0, nil, ErrNoKeyDataAfterVarint
+	}
+
+	keyType := KeyType(value)
+	keyBytes := multicodecBytes[bytesRead:]
+
 	if err := validateKeySize(keyType, keyBytes); err != nil {
-		return "", nil, err
+		return 0, nil, err
 	}
 
 	return keyType, keyBytes, nil
-}
-
-// FromBytes creates a DIDKey from raw bytes and key type
-func FromBytes(keyType KeyType, keyBytes []byte) (*DIDKey, error) {
-	if err := validateKeySize(keyType, keyBytes); err != nil {
-		return nil, err
-	}
-
-	return &DIDKey{
-		Type: keyType,
-		Key:  append([]byte(nil), keyBytes...), // Make a copy
-	}, nil
-}
-
-// Parse parses a DID key string into a DIDKey struct
-func Parse(didKey string) (*DIDKey, error) {
-	keyType, keyBytes, err := Decode(didKey)
-	if err != nil {
-		return nil, err
-	}
-
-	return &DIDKey{
-		Type: keyType,
-		Key:  keyBytes,
-	}, nil
-}
-
-// String returns the DID key string representation
-func (dk *DIDKey) String() (string, error) {
-	return Encode(dk.Type, dk.Key)
-}
-
-// Bytes returns a copy of the raw key bytes
-func (dk *DIDKey) Bytes() []byte {
-	return append([]byte(nil), dk.Key...)
-}
-
-// validateKeySize validates that the key bytes have the correct size for the given key type
-func validateKeySize(keyType KeyType, keyBytes []byte) error {
-	var expectedSize int
-
-	switch keyType {
-	case KeyTypeEd25519:
-		expectedSize = 32
-	case KeyTypeX25519:
-		expectedSize = 32
-	case KeyTypeSecp256k1:
-		expectedSize = 33 // Compressed public key
-	case KeyTypeBLS12381G1:
-		expectedSize = 48
-	case KeyTypeBLS12381G2:
-		expectedSize = 96
-	case KeyTypeP256:
-		expectedSize = 33 // Compressed public key
-	case KeyTypeP384:
-		expectedSize = 49 // Compressed public key
-	default:
-		return NewError("validate", fmt.Sprintf("unsupported key type: %s", keyType))
-	}
-
-	if len(keyBytes) != expectedSize {
-		return NewError("validate", fmt.Sprintf("invalid key size for %s: expected %d bytes, got %d", keyType, expectedSize, len(keyBytes)))
-	}
-
-	return nil
-}
-
-// IsValidDIDKey checks if a string is a valid DID key format
-func IsValidDIDKey(didKey string) bool {
-	_, _, err := Decode(didKey)
-	return err == nil
-}
-
-// GetKeyType extracts just the key type from a DID key string without full validation
-func GetKeyType(didKey string) (KeyType, error) {
-	keyType, _, err := Decode(didKey)
-	return keyType, err
 }
